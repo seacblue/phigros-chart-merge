@@ -1,3 +1,0 @@
-D:/program/Script/Phigros Chart Merge/build/CMakeFiles/json_parser.dir
-D:/program/Script/Phigros Chart Merge/build/CMakeFiles/edit_cache.dir
-D:/program/Script/Phigros Chart Merge/build/CMakeFiles/rebuild_cache.dir
