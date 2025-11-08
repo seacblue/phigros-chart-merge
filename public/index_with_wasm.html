@@ -1,0 +1,2598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<script type="module" src="chart_storage.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谱面文件合并工具</title>
+    <style>
+        :root {
+            --transition-default: 0.3s;
+            --transition-uultra: 0.08s;
+            --transition-ultra: 0.1s;
+            --transition-fast: 0.2s;
+            --transition-slow: 0.35s;
+            --transition-long: 0.5s;
+            
+            --animation-delay: 0.01s;
+            
+            --move-distance: 5px;
+            --move-distance-rev: -5px;
+            --move-distance-large: 15px;
+            --move-distance-large-rev: -15px;
+            --move-distance-x: 30px;
+            --move-distance-x-rev: -30px;
+            --drop-area-padding: 40px 20px;
+        }
+
+        /* 基础样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            user-select: none;
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE/Edge */
+        }
+
+        body {
+            background-color: #f9fafb;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .help-btn {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            padding: 12px;
+            background-color: white;
+            color: #165dff;
+            font-size: 24px;
+            font-weight: bold;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all var(--transition-default) ease;
+            z-index: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .help-btn:hover {
+            transform: scale(1.1);
+            background-color: #f5f5f5;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 模态框背景 */
+        .help-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0);
+            overflow: auto;
+            opacity: 0;
+            transition: 
+                opacity var(--transition-default) ease,
+                background-color var(--transition-default) ease,
+                visibility var(--transition-default) ease;
+        }
+        .help-modal.show {
+            opacity: 1;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 模态框内容 */
+        .help-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: scale(0.8);
+            transition: transform var(--transition-default) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .help-modal.show .help-modal-content {
+            transform: scale(1);
+        }
+
+        /* 关闭按钮 */
+        .help-modal-close {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            transition: 
+                all var(--transition-fast) ease;
+        }
+
+        .help-modal-close:hover,
+        .help-modal-close:focus {
+            transform: scale(1.2);
+            color: black;
+            text-decoration: none;
+        }
+
+        /* 模态框内容区域 */
+        .help-modal-body {
+            padding: 12px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+
+        .help-modal-body h2 {
+            margin-bottom: 15px;
+            color: #165dff;
+        }
+        .help-modal-body h3 {
+            margin: 20px 0 10px;
+            color: #165dff;
+            font-size: 18px;
+        }
+        .help-modal-body h4 {
+            margin: -2px 0 0 0;
+            color: #666;
+            font-size: 14px;
+            font-weight: normal;
+        }
+        .help-modal-body ul,
+        .help-modal-body ol {
+            margin: 8px 0 16px 20px;
+            line-height: 1.8;
+        }
+        .help-modal-body p {
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+        .help-modal-body ol li {
+            margin: 6px 0;
+        }
+
+        .help-modal-body p {
+            margin-bottom: 10px;
+        }
+
+        .merge-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: auto;
+            height: 50px;
+            border-radius: 8px;
+            padding: 0 18px;
+            gap: 8px;
+            background-color: #32cd32;
+            color: white;
+            font-size: 18px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all var(--transition-default) ease;
+            z-index: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .merge-btn:hover {
+            transform: scale(1.05);
+            background-color: #228b22;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all var(--transition-default) ease;
+        }
+        
+        .merge-icon {
+            width: 20px;
+            height: 20px;
+            margin: 2px 0 0 -3px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-default) ease;
+            z-index: 900;
+            display: flex;
+            
+            object-fit: contain;
+            filter: 
+                invert(20%)
+                sepia(100%)
+                saturate(5)
+                hue-rotate(90deg);
+        }
+        .merge-icon:hover,
+        .merge-btn:hover .merge-icon {
+            transform: scale(1.25);
+            filter: invert(100%);
+        }
+
+        .merge-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0);
+            overflow: auto;
+            opacity: 0;
+            transition: 
+                opacity var(--transition-default) ease,
+                background-color var(--transition-default) ease,
+                visibility var(--transition-default) ease;
+        }
+        .merge-modal.show {
+            opacity: 1;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 拼接模态框内容 */
+        .merge-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: scale(0.8);
+            transition: transform var(--transition-default) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .merge-modal.show .merge-modal-content {
+            transform: scale(1);
+        }
+
+        /* 拼接模态框关闭按钮 */
+        .merge-modal-close {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            transition: 
+                all var(--transition-fast) ease;
+        }
+
+        .merge-modal-close:hover,
+        .merge-modal-close:focus {
+            transform: scale(1.2);
+            color: black;
+            text-decoration: none;
+        }
+
+        /* 拼接模态框内容区域 */
+        .merge-modal-body {
+            padding: 12px;
+            margin-top: 20px;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .merge-modal-body h2 {
+            margin-bottom: 15px;
+            color: #32cd32;
+        }
+
+        .merge-options {
+            margin: 20px 0;
+        }
+
+        .merge-option {
+            margin: 10px 0;
+            padding: 10px;
+            size: 16px 16px;
+            border: none;
+            transition: all var(--transition-fast) ease;
+        }
+        .merge-option input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-top: -4px;
+            margin-right: 12px;
+            vertical-align: middle;
+        }
+        .merge-option:hover {
+            background-color: #f3f4f6;
+        }
+        .merge-option h4 {
+            padding-left: 32px;
+            margin: 2px 0 0 0;
+            color: #666;
+            font-size: 14px;
+            font-weight: normal;
+        }
+
+        .merge-option input {
+            margin-right: 10px;
+            accent-color: #32cd32;
+        }
+
+        .confirm-merge-btn {
+            background-color: #32cd32;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 10px 20px;
+            transition: background-color var(--transition-fast);
+            margin-top: 20px;
+            align-self: flex-end;
+            margin-right: 12px;
+        }
+
+        .confirm-merge-btn:hover {
+            background-color: #228b22;
+        }
+
+        /* 卡片容器 */
+        .card-container {
+            display: flex;
+            flex-direction: column;
+            margin: 0 auto;
+            gap: 20px;
+            padding: 10px;
+            width: 100%;
+            max-width: 700px;
+            scrollbar-width: thin;
+            align-items: center;
+            overflow: hidden;
+            transition: all var(--transition-slow) ease;
+        }
+
+        .card-container::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .card-container::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+
+        /* 卡片样式 */
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 25px 65px 15px 65px;
+            width: 100%;
+            flex-shrink: 0;
+            position: relative;
+            max-height: 500px;
+            transition: 
+                all         var(--transition-default) ease,
+                transform   var(--transition-fast) ease,
+                opacity     var(--transition-fast) ease,
+                max-height  var(--transition-long) ease,
+                background-color    var(--transition-fast) ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            overflow: clip;
+            scrollbar-width: thin;
+            scrollbar-gutter: stable;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+        .card::-webkit-scrollbar { width: 6px; }
+        .card::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 3px;
+        }
+        .card::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+        .card::-webkit-scrollbar-thumb:hover {
+            background-color: #9ca3af;
+        }
+        
+        .card.has-file:not(.collapsing) { overflow: auto; }
+        .card.has-file.collapsing { overflow: hidden; }
+        .card:active:not(:has(:active)) {
+            background-color: #f9f9f9;
+            transform: scale(0.98);
+        }
+        .card.no-active:active {
+            background-color: white;
+            transform: none;
+            transition: none;
+        }
+        .card input:active,
+        .card button:active,
+        .card .drop-area:active,
+        .card .metadata-header:active,
+        .card .judge-line-header:active,
+        .card .file-path:active {
+            transform: none;
+        }
+        .card.adding {
+            opacity: 0;
+            margin-top: -10px;
+            transform: translateX(var(--move-distance-x-rev));
+        }
+        .card.removing {
+            transition: 
+                all         var(--transition-default) ease,
+                transform   var(--transition-fast) ease,
+                opacity     var(--transition-uultra) ease,
+                max-height  var(--transition-long) ease;
+            /* 我靠，这有不明 bug，我只能通过修改 margin-top 来保证不会有位置突变，
+             * 但是这就导致下面的卡片会撞到上面的卡片，所以我只能又临时调一下
+             * opacity 来让它不要露馅 */
+            opacity: 0;
+            transform: translateX(var(--move-distance-x));
+            max-height: 0;
+            margin-top: -60px;
+        }
+
+        .card.collapsing,
+        .card.initially-collapsing {
+            height: auto;
+            max-height: 75px;
+            
+            /* 还有一个小 bug，我尽可能保证不出现垂直滚动条了，但是在导入谱面
+             * 之后再缩小展开，会短暂地冒出来一段滚动条。算了就这样吧，期待
+             * 有缘人来帮我修掉呵呵呵 */
+        }
+
+        .card.move-up-out,
+        .card.move-down-out,
+        .card.move-up-in,
+        .card.move-down-in {
+            pointer-events: none;
+        }
+        .card.move-up-out {
+            opacity: 0;
+            transform: translateY(var(--move-distance-rev));
+        }
+        .card.move-down-out {
+            opacity: 0;
+            transform: translateY(var(--move-distance));
+        }
+        .card.move-up-in {
+            opacity: 0;
+            transform: translateY(var(--move-distance));
+        }
+        .card.move-down-in {
+            opacity: 0;
+            transform: translateY(var(--move-distance-rev));
+        }
+
+        .card.collapsing .drop-area,
+        .card.collapsing .time-controls-container,
+        .card.collapsing .metadata-container,
+        .card.collapsing .judge-line-container,
+        .card.collapsing .status-message,
+        .card.initially-collapsing .drop-area,
+        .card.initially-collapsing .time-controls-container,
+        .card.initially-collapsing .metadata-container,
+        .card.initially-collapsing .judge-line-container,
+        .card.initially-collapsing .status-message,
+        .card.removing .drop-area,
+        .card.removing .time-controls-container,
+        .card.removing .metadata-container,
+        .card.removing .judge-line-container,
+        .card.removing .status-message  {
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all var(--transition-long) ease;
+        }
+        .card.collapsing .file-selector {
+            transform: translateY(-10px);
+            transition: all var(--transition-long) ease;
+        }
+        .card .drop-area,
+        .card .status-message {
+            opacity: 1;
+            transition: all var(--transition-long) ease;
+        }
+
+        /* 卡片编号 */
+        .card-number {
+            position: absolute;
+            display: flex;
+            font-size: 22px;
+            transform-origin: center;
+            top: 10px;
+            left: 10px;
+            width: 34px;
+            height: 34px;
+            transform: scale(1);
+            border: none;
+            border-radius: 22px;
+            transition: 
+                transform           200ms ease, 
+                background-color    var(--transition-slow) ease, 
+                color               var(--transition-slow) ease;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .card-number:hover {
+            background-color: #f3f4f6;
+            color: #165dff;
+        }
+        .card-number.scale-out { transform: scale(0); }
+        .card-number.scale-in  { transform: scale(1); }
+
+        .card-content {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            overflow: visible;
+        }
+
+        /* 文件选择区域 */
+        .file-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            align-items: center;
+            width: 100%;
+            transition: all 0.25s ease;
+        }
+
+        .file-path {
+            flex: 1;
+            padding: 12px var(--move-distance-large);
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            background-color: #f3f4f6;
+            color: #4b5563;
+            font-size: 14px;
+            cursor: default;
+            transition: all var(--transition-fast) ease;
+        }
+
+        .file-path:read-only {
+            outline: none;
+        }
+
+        .select-btn, .delete-btn, .up-btn, .down-btn {
+            width: 60px;
+            flex: none;
+            padding: 10px 10px;
+            font-size: 14px;
+            min-width: 60px;
+            text-align: center;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast) ease, background-color var(--transition-fast);
+        }
+
+        .select-btn { background-color: #165dff; }
+        .select-btn:hover { background-color: #0d47a1; }
+
+        .delete-btn { background-color: #ef4444; }
+        .delete-btn:hover { background-color: #dc2626; }
+
+        .up-btn, .down-btn {
+            background-color: #6b7280;
+            color: white;
+        }
+        .up-btn:hover, .down-btn:hover { background-color: #4b5563; }
+        .up-btn:disabled, .down-btn:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        .hidden-input {
+            display: none;
+        }
+
+        /* 添加按钮 */
+        .add-btn-container {
+            flex-shrink: 0;
+            width: 100%;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: all var(--transition-fast) ease;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .add-btn-container.fading-out {
+            opacity: 0;
+            transform: translateY(var(--move-distance));
+        }
+        .add-btn-container.fading-in {
+            opacity: 0;
+            transform: translateY(var(--move-distance-rev));
+        }
+
+        .add-btn {
+            background-color: #32cd32;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color var(--transition-fast);
+            width: 100%;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .add-btn:hover {
+            background-color: #228b22;
+        }
+
+        /* 拖拽区域 */
+        .drop-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: var(--drop-area-padding);
+            text-align: center;
+            transition: all var(--transition-default) ease;
+            max-height: 200px;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+        .drop-area:hover {
+            border-color: #4b5563;
+            background-color: rgba(129, 151, 202, 0.05);
+        }
+        .drop-area.drag-over {
+            border-color: #165dff;
+            background-color: rgba(22, 93, 255, 0.05);
+        }
+        .drop-area.hidden {
+            opacity: 0;
+            max-height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            transition: all var(--transition-default) ease;
+        }
+
+        .drop-text {
+            color: #4b5563;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .drop-subtext {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        /* 时间控制区域 */
+        .time-controls-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            width: 100%;
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(10px);
+            overflow: hidden;
+            justify-content: center;
+            transition: all var(--transition-default) ease;
+        }
+
+        .time-controls-container.visible {
+            max-height: 100px;
+            opacity: 1;
+            transform: translateY(0);
+            margin-bottom: 20px;
+        }
+
+        .time-control-section {
+            flex: 1.5;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            margin: 0 auto;
+            max-width: 200px;
+        }
+        .time-control-section:not(:last-child),
+        .checkbox-section:first-of-type {
+            position: relative;
+        }
+        .time-control-section:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 10%;
+            height: 80%;
+            width: 1px;
+            background-color: #d1d5db;
+        }
+
+        .time-control-label {
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .time-signature {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            height: 36px;
+        }
+        .time-signature .measure {
+            width: 60px;
+        }
+        .time-signature .numerator,
+        .time-signature .denominator {
+            width: 40px;
+        }
+
+        .time-signature input {
+            width: 100%;
+            min-width: 40px;
+            height: 100%;
+            padding: 0 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .time-signature input::-webkit-inner-spin-button,
+        .time-signature input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .time-signature input:focus {
+            outline: none;
+            border-color: #165dff;
+        }
+
+        .time-signature .separator {
+            color: #6b7280;
+            font-size: 16px;
+        }
+
+        .checkbox-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #4b5563;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .checkbox-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: #165dff;
+            cursor: pointer;
+        }
+
+        /* 元数据 */
+        .metadata-container {
+            margin-top: 10px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            overflow: hidden;
+            transition: all var(--transition-default) ease;
+            display: none;
+            max-height: 0;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        .metadata-container.visible {
+            display: block;
+            max-height: 400px;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .metadata-header {
+            padding: 10px 20px;
+            background-color: #f3f4f6;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--transition-default) ease;
+        }
+        .metadata-header:hover { background-color: #e5e7eb; }
+        .metadata-container.expanded .metadata-header { 
+            background-color: #e5e7eb;
+        }
+        .metadata-container.expanded .metadata-header:hover {
+            background-color: #d1d5db;
+        }
+
+        .metadata-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            overflow: hidden;
+            line-height: 12px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            transition: height var(--transition-fast) ease;
+        }
+        .metadata-container.expanded .metadata-icon {
+            height: 2px;
+        }
+
+        .metadata-content {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height var(--transition-default) ease,
+                        padding var(--transition-default) ease;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+        .metadata-content::-webkit-scrollbar { width: 6px; }
+        .metadata-content::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 3px;
+        }
+        .metadata-content::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+        .metadata-content::-webkit-scrollbar-thumb:hover {
+            background-color: #9ca3af;
+        }
+        .metadata-container.expanded .metadata-content {
+            padding: var(--move-distance-large) 20px;
+            max-height: 250px;
+        }
+
+        .metadata-item {
+            margin-bottom: 8px;
+        }
+
+        .metadata-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .metadata-label {
+            color: #6b7280;
+            font-size: 13px;
+            display: block;
+            margin-bottom: 0px;
+        }
+
+        .metadata-value {
+            color: #111827;
+            font-size: var(--move-distance-large);
+        }
+
+        /* 判定线详情 */
+        .judge-line-container {
+            margin-top: 10px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            overflow: hidden;
+            transition: all var(--transition-default) ease;
+            display: none;
+            max-height: 0;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        .judge-line-container.visible {
+            display: block;
+            max-height: 400px;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .judge-line-header {
+            padding: 10px 20px;
+            background-color: #f3f4f6;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--transition-default) ease;
+        }
+        .judge-line-header.has-independent .independent-count-indicator {
+            display: inline-flex;
+            transform: scale(1) translateX(3px);
+        }
+        .judge-line-header.has-independent .judge-line-icon {
+            display: none;
+        }
+        
+        .judge-line-header:hover { background-color: #e5e7eb; }
+        .judge-line-container.expanded .judge-line-header { 
+            background-color: #e5e7eb;
+        }
+        .judge-line-container.expanded .judge-line-header:hover {
+            background-color: #d1d5db;
+        }
+
+        .judge-line-container .judge-line-header.has-independent {
+            background-color: #fff9c4;
+        }
+        .judge-line-container .judge-line-header.has-independent:hover { 
+            background-color: #fef3c7;
+        }
+        .judge-line-container.expanded .judge-line-header.has-independent {
+            background-color: #fef3c7;
+        }
+        .judge-line-container.expanded .judge-line-header.has-independent:hover {
+            background-color: #f7eab8;
+        }
+
+        .judge-line-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            overflow: hidden;
+            line-height: 12px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            transition: height var(--transition-fast) ease;
+        }
+        .judge-line-icon.count-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #4caf50;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            height: 16px;
+        }
+        .judge-line-container.expanded .judge-line-icon {
+            height: 2.5px;
+        }
+
+        .judge-line-content {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height var(--transition-default) ease,
+                        padding var(--transition-default) ease;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+        .judge-line-content::-webkit-scrollbar { width: 6px; }
+        .judge-line-content::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 3px;
+        }
+        .judge-line-content::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+        .judge-line-content::-webkit-scrollbar-thumb:hover {
+            background-color: #9ca3af;
+        }
+        .judge-line-container.expanded .judge-line-content {
+            padding: var(--move-distance-large) 20px;
+            max-height: 250px;
+        }
+        
+        /* 判定线下拉框样式 */
+        .judge-line-dropdown {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .dropdown-header {
+            padding: 8px 12px;
+            font-size: 12px;
+            background-color: #f9fafb;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color var(--transition-fast);
+        }
+        .dropdown-header:hover { background-color: #f3f4f6; }
+        .judge-line-dropdown.independent .dropdown-header {
+            background-color: #fff9c4;
+            transition: background-color var(--transition-default) ease;
+        }
+        .judge-line-dropdown.independent .dropdown-header:hover {
+            background-color: #fef3c7;
+        }
+
+        .dropdown-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            overflow: hidden;
+            line-height: 12px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            transition: height var(--transition-fast) ease;
+        }
+        .independent-count-indicator {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: #4caf50;
+            color: white;
+            transform: scale(0);
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+            transition: all var(--transition-default) ease;
+        }
+
+        .dropdown-content {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height var(--transition-default) ease,
+                        padding var(--transition-default) ease;
+        }
+        .judge-line-dropdown.expanded .dropdown-content {
+            padding: 8px 20px;
+            max-height: 450px;
+        }
+        .judge-line-dropdown.expanded .dropdown-icon {
+            height: 2.5px;
+        }
+
+        .dropdown-detail {
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #4b5563;
+        }
+        .dropdown-detail:last-child { margin-bottom: 12px; }
+        .dropdown-time-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .dropdown-time-controls .time-signature { height: 30px; }
+        .dropdown-time-controls .time-signature input {
+            width: 35px;
+            height: 100%;
+            font-size: 12px;
+            padding: 0 5px;
+        }
+        .dropdown-time-controls .time-control-label { font-size: 12px; }
+        .dropdown-content .checkbox-section {
+            padding-top: 10px;
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        .dropdown-content .checkbox-section .checkbox-item {
+            font-size: 12px;
+        }
+
+
+        /* 状态消息 */
+        .status-message {
+            margin-top: var(--move-distance-large);
+            font-size: 13px;
+            display: none;
+        }
+
+        .error {
+            color: #ef4444;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #10b981;
+            color: white;
+            padding: 10px var(--move-distance-large);
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity var(--transition-default), transform var(--transition-default);
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 576px) {
+            .select-btn, .up-btn, .down-btn, .delete-btn {
+                min-width: 25px;
+                max-width: 45px;
+                padding: 10px 3px;
+                transition: 
+                    width var(--transition-long) ease,
+                    max-width var(--transition-long) ease,
+                    min-width var(--transition-long) ease,
+                    padding var(--transition-long) ease,
+                    font-size var(--transition-long) ease;
+            }
+
+            .file-selector {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .file-path {
+                width: 100%;
+                order: 0;
+            }
+            
+            /* 时间控制区域响应式调整 */
+            .time-controls-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .time-controls-container.visible {
+                max-height: 200px; /* 增大最大高度 */
+            }
+            
+            .time-control-section {
+                width: 100%;
+                max-width: none;
+            }
+            .time-control-section:not(:last-child)::after { display: none; }
+            
+            .checkbox-section {
+                width: 100%;
+                flex-direction: row;
+                justify-content: space-around;
+                margin-top: 10px;
+            }
+            
+            /* 调整元数据样式 */
+            .metadata-content { padding: 15px 10px; }
+            .metadata-container {
+                max-height: 0;
+                overflow: hidden;
+            }
+            .metadata-container.visible { max-height: 45px; }
+            .metadata-container.visible.expanded { max-height: 400px; }
+            .metadata-container.expanded .metadata-content {
+                max-height: 150px;
+                padding: 12px 10px 12px 20px;
+                box-sizing: border-box;
+            }
+            .metadata-content { padding-left: 20px; }
+
+            .judge-line-content { padding: 15px 10px; }
+            .judge-line-container {
+                max-height: 0;
+                overflow: hidden;
+            }
+            .judge-line-container.visible { max-height: 45px; }
+            .judge-line-container.visible.expanded { max-height: 400px; }
+            .judge-line-container.expanded .judge-line-content {
+                max-height: 150px;
+                padding: 12px 10px 12px 20px;
+                box-sizing: border-box;
+            }
+            .judge-line-content { padding-left: 20px; }
+            
+            .dropdown-time-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="card-container"></div>
+    <div id="toast" class="toast"></div>
+    <button class="help-btn">?</button>
+    <div id="helpModal" class="help-modal">
+        <div class="help-modal-content">
+            <button class="help-modal-close">×</button>
+            <div class="help-modal-body">
+                <h2>Phigros 谱面文件合并工具</h2>
+
+                <p>尽管 PE 时代的工具箱支持谱面合并，但类工具的核心逻辑是将多个谱面的判定线直接拼接，导致判定线数量冗余，多数场景下不符合实际使用需求。</p>
+                <p>本工具的设计目标为：</p>
+                <ul>
+                    <li>拼接同一张谱面的不同片段；</li>
+                    <li>合作写谱时，拼接多人同步制作的谱面片段。</li>
+                </ul>
+                <h4>虽然该工具不强制校验谱面元数据，但建议自行确保选择的谱面来自同一曲目。可以在载入谱面后点击“元数据”以确认。</h4>
+                
+                <h3>使用方法</h3>
+                <ol>
+                    <li>拖拽 JSON 或 PEZ 格式文件至卡片拖拽区域，或点击该区域手动上传本地文件；</li>
+                    <li>配置谱面拼接片段的开始时间与结束时间，根据需求勾选是否复制事件与音符；</li>
+                    <h4>你可以单独调整特定的判定线。点击卡片中的“判定线详情”，展开次级设置面板，单独配置判定线的时间范围、复制内容。</h4>
+                    <li>点击“添加”按钮，可新增谱面槽位以导入更多片段；</li>
+                    <h4>双击谱面槽位可以折叠该槽位，再次双击可以展开。</h4>
+                    <li>通过“上移”“下移”按钮，调整谱面片段的合并顺序；</li>
+                    <li>完成所有设置后，点击右下角“开始拼接”按钮，选择拼接策略并确认，即可生成合并后的谱面文件。</li>
+                    <h4>合并后谱面文件的元数据、判定线数量及其他信息，将继承最顶端的谱面文件。</h4>
+                </ol>
+                
+                <h3>注意事项</h3>
+                <p>如果载入的是 PEZ 文件，那么下载下来的 JSON 文件名字与 PEZ 内的不一样，请自行修改并替换。</p>
+                <p>加载谱面文件后，若可以继续操作但无响应，且控制台提示内存溢出，请刷新页面并重新载入文件。</p>
+                <h4>我解决不了这个问题，哈哈。</h4>
+                <h4>顺带一提，如果你看得懂我的代码你会发现我的前端写得一坨。</h4>
+            </div>
+        </div>
+    </div>
+    <button class="merge-btn">
+        <img src="icons/merge.png" alt="合并图标" class="merge-icon">
+        开始合并
+    </button>
+    <div id="mergeModal" class="merge-modal">
+        <div class="merge-modal-content">
+            <button class="merge-modal-close">×</button>
+            <div class="merge-modal-body">
+                <div class="merge-options">
+                    <div class="merge-option">
+                        <input type="checkbox" id="truncateStart" name="truncateStart">
+                        <label for="truncateStart">截断开始时间</label>
+                        <h4>若开启，事件与音符的头时间必须严格不早于开始时间；否则，可以跨越开始时间。</h4>
+                    </div>
+                    <div class="merge-option">
+                        <input type="checkbox" id="truncateEnd" name="truncateEnd">
+                        <label for="truncateEnd">截断结束时间</label>
+                        <h4>若开启，事件与音符的尾时间必须严格不晚于结束时间；否则，可以跨越结束时间。</h4>
+                    </div>
+                </div>
+                <button id="confirmMerge" class="confirm-merge-btn">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="json_parser.js"></script>
+    <script type="module">
+        import { ChartStorage } from './chart_storage.js';
+        const chartStorage = new ChartStorage();
+        const cardContainer = document.querySelector('.card-container');
+        const toast = document.getElementById('toast');
+
+        // 初始化时添加按钮
+        function initAddButton() {
+            // 先移除已存在的添加按钮容器
+            const existingAddContainer = document.querySelector('.add-btn-container');
+            if (existingAddContainer) {
+                existingAddContainer.remove();
+            }
+
+            // 获取第一个卡片的高度作为参考
+            const cards = document.querySelectorAll('.card');
+            const cardHeight = cards.length > 0 ? cards[0].offsetHeight : 0;
+
+            // 创建添加按钮容器
+            const addBtnContainer = document.createElement('div');
+            // addBtnContainer.className = 'add-btn-container fading-in';
+            addBtnContainer.className = 'add-btn-container';
+
+            // 创建添加按钮
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-btn';
+            addBtn.textContent = '+ 添加';
+            addBtn.addEventListener('click', createNewCard);
+
+            addBtnContainer.appendChild(addBtn);
+            cardContainer.appendChild(addBtnContainer);
+            /*
+            setTimeout(() => {
+                addBtnContainer.classList.remove('fading-in');
+            }, getCSSVarAsMs('--animation-delay'));
+            */
+        }
+
+        function updateCardStates() {
+            const cards = document.querySelectorAll('.card');
+            const cardCount = cards.length;
+
+            // 更新编号和删除按钮
+            cards.forEach((card, index) => {
+                // const cardNumber = card.querySelector('.card-number');
+                const fileInput = card.querySelector('.file-input');
+                // const label = card.querySelector('.select-btn');
+                const deleteBtn = card.querySelector('.delete-btn');
+                const filePath = card.querySelector('.file-path');
+                const upBtn = card.querySelector('.up-btn');
+                const downBtn = card.querySelector('.down-btn');
+
+                // cardNumber.textContent = index;
+                // fileInput.id = `fileInput-${index}`;
+                // label.htmlFor = `fileInput-${index}`;
+
+                if (upBtn && downBtn) {
+                    // 第一个卡片不能上移
+                    upBtn.disabled = index === 0;
+                    // 最后一个卡片不能下移
+                    downBtn.disabled = index === cardCount - 1;
+                }
+
+                /*
+                if (cardCount > 1) {
+                    deleteBtn.classList.add('visible');
+                    filePath.style.flex = '1';
+                    label.style.marginRight = '0';
+                } else {
+                    deleteBtn.classList.remove('visible');
+                    filePath.style.flex = '1';
+                    label.style.marginRight = '-70px';
+                }
+                */
+            });
+
+            // 确保添加按钮始终被重新初始化
+            initAddButton();
+        }
+
+        function createCardHTML(index) {
+            return `
+<!-- <span class="card-number">-</span> -->
+<div class="card-content">
+<div class="file-selector">
+    <input type="text" class="file-path" placeholder="未选择文件" readonly>
+    <!-- <label for="fileInput-${index}" class="select-btn">选择</label> -->
+    <button class="up-btn">上移</button>
+    <button class="down-btn">下移</button>
+    <button class="delete-btn">删除</button>
+    <input type="file" id="fileInput-${index}" class="file-input hidden-input" accept=".json,.pez">
+</div>
+<div class="drop-area">
+    <p class="drop-text">拖拽 JSON 或 PEZ 文件到此处以读取</p>
+    <p class="drop-subtext">或点击此处以浏览本地文件</p>
+</div>
+<div class="time-controls-container">
+    <div class="time-control-section">
+        <span class="time-control-label">开始时间</span>
+        <div class="time-signature">
+            <input type="number" min="0" class="measure start-measure" id="start-measure-${index}" inputmode="numeric" pattern="\d*">
+            <span class="separator">:</span>
+            <input type="number" min="0" class="numerator start-numerator" id="start-numerator-${index}" inputmode="numeric" pattern="\d*">
+            <span class="separator">/</span>
+            <input type="number" min="1" class="denominator start-denominator" id="start-denominator-${index}" inputmode="numeric" pattern="\d" value="4">
+        </div>
+    </div>
+    <div class="time-control-section">
+        <span class="time-control-label">结束时间</span>
+        <div class="time-signature">
+            <input type="number" min="0" class="measure end-measure" id="end-measure-${index}" inputmode="numeric" pattern="\d*">
+            <span class="separator">:</span>
+            <input type="number" min="0" class="numerator end-numerator" id="end-numerator-${index}" inputmode="numeric" pattern="\d*">
+            <span class="separator">/</span>
+            <input type="number" min="1" class="denominator end-denominator" id="end-denominator-${index}" inputmode="numeric" pattern="\d" value="4">
+        </div>
+    </div>
+    <div class="checkbox-section">
+        <label class="checkbox-item">
+            <input type="checkbox" checked class="copy-events main-copy-events" id="copy-events-${index}">
+            <span>复制事件</span>
+        </label>
+        <label class="checkbox-item">
+            <input type="checkbox" checked class="copy-notes main-copy-notes" id="copy-notes-${index}">
+            <span>复制音符</span>
+        </label>
+    </div>
+</div>
+<div class="metadata-container">
+    <div class="metadata-header">
+        <span>元数据</span>
+        <span class="metadata-icon">▼</span>
+    </div>
+    <div class="metadata-content"></div>
+</div>
+<div class="judge-line-container">
+    <div class="judge-line-header">
+        <span>判定线详情</span>
+        <span class="judge-line-icon">▼</span>
+        <span class="independent-count-indicator"></span>
+    </div>
+    <div class="judge-line-content"></div>
+</div>
+<div class="status-message"></div>
+`;
+        }
+
+        // 创建新卡片
+        function createNewCard() {
+            let newCard;
+            const cards = document.querySelectorAll('.card');
+            let maxIndex = -1;
+            cards.forEach(card => {
+                const currentIndex = parseInt(card.dataset.cardIndex, 10);
+                if (!isNaN(currentIndex) && currentIndex > maxIndex) {
+                    maxIndex = currentIndex;
+                }
+            });
+            const newIndex = maxIndex + 1;
+            
+            newCard = document.createElement('div');
+            newCard.className = 'card adding initially-collapsing';
+            newCard.innerHTML = createCardHTML(newIndex);
+            newCard.dataset.cardIndex = newIndex;
+
+            bindCardEvents(newCard);
+            const addContainer = document.querySelector('.add-btn-container');
+            addContainer.remove();
+            cardContainer.appendChild(newCard);
+
+            setTimeout(() => {
+                newCard.classList.remove('adding', 'initially-collapsing');
+            }, getCSSVarAsMs('--animation-delay'));
+            
+            // 更新状态
+            updateCardStates();
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // 绑定卡片事件
+        function bindCardEvents(card) {
+            const cardIndex = parseInt(card.dataset.cardIndex);
+            const fileInput = card.querySelector('.file-input');
+            const filePath = card.querySelector('.file-path');
+            const dropArea = card.querySelector('.drop-area');
+            const statusMessage = card.querySelector('.status-message');
+            const deleteBtn = card.querySelector('.delete-btn');
+            const upBtn = card.querySelector('.up-btn');
+            const downBtn = card.querySelector('.down-btn');
+            const timeControls = card.querySelector('.time-controls-container');
+            const metadataContainer = card.querySelector('.metadata-container');
+            const metadataHeader = card.querySelector('.metadata-header');
+            const judgeLineContainer = card.querySelector('.judge-line-container');
+            const judgeLineHeader = card.querySelector('.judge-line-header');
+            const judgeLineContent = card.querySelector('.judge-line-content');
+            
+            function initMainValues() {
+                const mainValues = {
+                    startTime: {
+                        measure: 0,
+                        numerator: 0,
+                        denominator: 4
+                    },
+                    endTime: {
+                        measure: 0,
+                        numerator: 0,
+                        denominator: 4
+                    },
+                    copyEvents: true,
+                    copyNotes: true
+                };
+                return mainValues;
+            }
+            
+            function getMainElements() {
+                return {
+                    startTime: {
+                        measure: card.querySelector(`#start-measure-${cardIndex}`),
+                        numerator: card.querySelector(`#start-numerator-${cardIndex}`),
+                        denominator: card.querySelector(`#start-denominator-${cardIndex}`)
+                    },
+                    endTime: {
+                        measure: card.querySelector(`#end-measure-${cardIndex}`),
+                        numerator: card.querySelector(`#end-numerator-${cardIndex}`),
+                        denominator: card.querySelector(`#end-denominator-${cardIndex}`)
+                    },
+                    copyEvents: card.querySelector('.main-copy-events'),
+                    copyNotes: card.querySelector('.main-copy-notes')
+                };
+            }
+
+            function syncMainValuesFromElements() {
+                const mainElements = getMainElements();
+                const mainValues = {
+                    startTime: {
+                        measure: parseInt(mainElements.startTime.measure.value) || 0,
+                        numerator: parseInt(mainElements.startTime.numerator.value) || 0,
+                        denominator: parseInt(mainElements.startTime.denominator.value) || 4
+                    },
+                    endTime: {
+                        measure: parseInt(mainElements.endTime.measure.value) || 0,
+                        numerator: parseInt(mainElements.endTime.numerator.value) || 0,
+                        denominator: parseInt(mainElements.endTime.denominator.value) || 4
+                    },
+                    copyEvents: mainElements.copyEvents.checked,
+                    copyNotes: mainElements.copyNotes.checked
+                };
+                return mainValues;
+            }
+
+            let mainValues = initMainValues();
+            const mainElements = getMainElements();
+
+            // 文件选择
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    handleFileSelection(e.target.files[0], filePath, statusMessage);
+                }
+            });
+            
+            // 拖拽事件
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+                dropArea.addEventListener(event, preventDefaults, false);
+            });
+            
+            ['dragenter', 'dragover'].forEach(event => {
+                dropArea.addEventListener(event, () => dropArea.classList.add('drag-over'), false);
+            });
+            
+            ['dragleave', 'drop'].forEach(event => {
+                dropArea.addEventListener(event, () => dropArea.classList.remove('drag-over'), false);
+            });
+            
+            dropArea.addEventListener('click', () => { fileInput.click(); });
+            dropArea.addEventListener('drop', (e) => {
+                const file = e.dataTransfer.files[0];
+                if (file) handleFileSelection(file, filePath, statusMessage);
+            }, false);
+            
+            // 删除按钮
+            deleteBtn.addEventListener('click', async () => {
+                const hasFile = filePath.value !== '未选择文件' && filePath.value !== '';
+                // 如果有文件，显示确认提示
+                if (hasFile) {
+                    const confirmDelete = confirm(`确定要删除已选择的文件"${filePath.value}"吗？`);
+                    if (!confirmDelete) {
+                        return; // 用户取消删除
+                    }
+                }
+                
+                try {
+                    await chartStorage.deleteChart(cardIndex);
+                    console.log(`卡片 ${cardIndex} 的数据已删除`);
+                } catch (error) {
+                    console.error('删除数据失败:', error);
+                    // showToast('清理数据失败');
+                }
+
+                const addContainer = document.querySelector('.add-btn-container');
+                // addContainer.classList.add('fading-out');
+                
+                fileInput.value = '';
+                filePath.value = '';
+                statusMessage.textContent = '';
+                statusMessage.style.display = 'none';
+
+                const timeInputs = card.querySelectorAll('.time-signature input');
+                timeInputs.forEach(input => input.value = '');
+
+                const checkboxes = card.querySelectorAll('.checkbox-item input');
+                checkboxes.forEach(checkbox => checkbox.checked = false);
+                
+                const metadataContent = card.querySelector('.metadata-content');
+                if (metadataContent) {
+                    metadataContent.innerHTML = '';
+                    // 移除元数据容器的展开状态
+                    metadataContainer.classList.remove('visible', 'expanded');
+                }
+                    
+                const judgeLineContent = card.querySelector('.judge-line-content');
+                if (judgeLineContent) {
+                    judgeLineContent.innerHTML = '';
+                    // 移除判定线容器的展开状态
+                    judgeLineContainer.classList.remove('visible', 'expanded');
+                }
+                card.classList.add('removing');
+                
+                setTimeout(() => {
+                    card.remove();
+                    addContainer.remove();
+                    updateCardStates();
+                }, getCSSVarAsMs('--transition-slow'));
+            });
+    
+            // 上移按钮
+            upBtn.addEventListener('click', () => {
+                moveCardUp(card);
+            });
+            
+            // 下移按钮
+            downBtn.addEventListener('click', () => {
+                moveCardDown(card);
+            });
+            
+            // 折叠按钮
+            /*
+            cardNumber.addEventListener('click', () => {
+                cardNumber.classList.remove('scale-in', 'scale-out');
+                cardNumber.classList.add('scale-out');
+                card.classList.toggle('collapsing');
+                setTimeout(() => {
+                    // 切换文本
+                    const isCollapsed = card.classList.contains('collapsing');
+                    cardNumber.textContent = isCollapsed ? '+' : '-';
+                    
+                    // 200ms 放大
+                    cardNumber.classList.remove('scale-out');
+                    cardNumber.classList.add('scale-in');
+                    
+                    // 动画结束后移除放大类，恢复默认状态
+                    setTimeout(() => {
+                        cardNumber.classList.remove('scale-in');
+                    }, 200);
+                }, 200);
+            });
+            */
+           
+            card.addEventListener('dblclick', (e) => {
+                const isButton = e.target.closest(
+                    'input, button, .drop-area, \
+                     .metadata-header, .judge-line-header, .file-path, \
+                     .metadata-content, .judge-line-content, \
+                     .checkbox-item');
+                if (isButton) return;
+
+                const isCollapsing = card.classList.toggle('collapsing');
+                if (isCollapsing) {
+                    card.scrollTop = 0; // 重置滚动位置
+                }
+                // cardNumber.textContent = isCollapsed ? '+' : '-';
+            });
+            card.addEventListener('mousedown', (e) => {
+                const isScrollbar = e.offsetX > card.clientWidth - 1;
+                // 什么，1px 的魔数？ 
+                
+                if (isScrollbar) {
+                    card.classList.add('no-active');
+                } else {
+                    card.classList.remove('no-active');
+                }
+            });
+
+            // 鼠标松开或离开时恢复 active 效果
+            card.addEventListener('mouseup', () => {
+                card.classList.remove('no-active');
+            });
+            card.addEventListener('mouseleave', () => {
+                card.classList.remove('no-active');
+            });
+
+            const timeSignatures = card.querySelectorAll('.time-signature');
+            timeSignatures.forEach(signature => {
+                const numerator = signature.querySelector('.numerator');
+                const denominator = signature.querySelector('.denominator');
+                
+                // 验证函数
+                const validateTimeSignature = () => {
+                    const num = parseInt(numerator.value) || 0;
+                    const den = parseInt(denominator.value) || 1;
+                    
+                    // 确保分母至少为1
+                    if (den < 1) {
+                        denominator.value = 1;
+                    }
+                    
+                    // 确保分子不大于分母
+                    if (num > den) {
+                        numerator.value = den;
+                    }
+                };
+                
+                // 绑定验证事件
+                numerator.addEventListener('input', validateTimeSignature);
+                denominator.addEventListener('input', validateTimeSignature);
+            });
+
+            const timeInputs = card.querySelectorAll('.time-signature input');
+            timeInputs.forEach(input => {
+                input.addEventListener('click', () => {
+                    input.select();
+                });
+                // 兼容移动设备
+                input.addEventListener('focus', () => {
+                    input.select();
+                });
+            });
+
+            metadataHeader.addEventListener('click', () => {
+                metadataContainer.classList.toggle('expanded');
+            });
+            
+            judgeLineHeader.addEventListener('click', () => {
+                judgeLineContainer.classList.toggle('expanded');
+            });
+
+            if (judgeLineContainer) {
+                // 找到判定线内容容器（.judge-line-content），作为事件委托的父级
+                const judgeLineContent = judgeLineContainer.querySelector('.judge-line-content');
+                if (judgeLineContent) {
+                    judgeLineContent.addEventListener('click', (e) => {
+                        // 确认点击的是.dropdown-header（包括其内部子元素）
+                        const dropdownHeader = e.target.closest('.dropdown-header');
+                        if (dropdownHeader) {
+                            // 找到当前点击的下拉框容器
+                            const dropdown = dropdownHeader.closest('.judge-line-dropdown');
+                            if (dropdown) {
+                                dropdown.classList.toggle('expanded');
+                                if (dropdown.classList.contains('expanded')) {
+                                    const subTimeInputs = dropdown.querySelectorAll('.dropdown-time-controls input');
+                                    subTimeInputs.forEach(input => {
+                                        input.removeEventListener('input', handleSubChange);
+                                        input.addEventListener('input', handleSubChange);
+                                    });
+                                    
+                                    const subCheckboxes = dropdown.querySelectorAll('.dropdown-content .checkbox-item input');
+                                    subCheckboxes.forEach(checkbox => {
+                                        checkbox.removeEventListener('change', handleSubChange);
+                                        checkbox.addEventListener('change', handleSubChange);
+                                    });
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            Object.values(mainElements.startTime).forEach(el => {
+                el.addEventListener('input', handleMainValueChange);
+            });
+            Object.values(mainElements.endTime).forEach(el => {
+                el.addEventListener('input', handleMainValueChange);
+            });
+            mainElements.copyEvents.addEventListener('change', handleMainValueChange);
+            mainElements.copyNotes.addEventListener('change', handleMainValueChange);
+
+            function handleSubChange(e) {
+                const dropdown = e.target.closest('.judge-line-dropdown');
+                if (dropdown) {
+                    checkIfIndependent(dropdown);
+                    updateJudgeLineHeader();
+                }
+            }
+            
+            function updateJudgeLineHeader() {
+                const judgeLineHeader = card.querySelector('.judge-line-header');
+                const judgeLineContent = card.querySelector('.judge-line-content');
+                const countIndicator = judgeLineHeader.querySelector('.independent-count-indicator');
+                
+                const independentDropdowns = judgeLineContent.querySelectorAll('.judge-line-dropdown.independent');
+                const independentCount = independentDropdowns.length;
+                if (independentCount > 0) {
+                    countIndicator.textContent = independentCount;
+                    judgeLineHeader.classList.add('has-independent');
+                } else {
+                    judgeLineHeader.classList.remove('has-independent');
+                }
+            }
+
+            function checkIfIndependent(dropdown) {
+                const timeInputs = dropdown.querySelectorAll('.dropdown-time-controls input');
+                const timeInputsCleared = 
+                    Array.from(timeInputs).every(input => input.value === '');
+                
+                const dropdownCheckboxes = dropdown.querySelectorAll('.dropdown-content .checkbox-item input');
+                const dropdownEventsChecked = dropdownCheckboxes[0].checked;
+                const dropdownNotesChecked = dropdownCheckboxes[1].checked;
+                const mainCheckboxes = card.querySelectorAll('.main-copy-events, .main-copy-notes');
+                const mainEventsChecked = mainCheckboxes[0].checked;
+                const mainNotesChecked = mainCheckboxes[1].checked;
+
+                const checkboxesDifferent = 
+                    dropdownEventsChecked !== mainEventsChecked || 
+                    dropdownNotesChecked !== mainNotesChecked;
+
+                const isIndependent = !timeInputsCleared || checkboxesDifferent;
+                if (isIndependent) {
+                    dropdown.classList.add('independent');
+                } else {
+                    dropdown.classList.remove('independent');
+                }
+
+                updateJudgeLineHeader();
+            }
+
+            function handleMainValueChange() {
+                const mainValues = syncMainValuesFromElements();
+
+                judgeLineContent.querySelectorAll('.judge-line-dropdown:not(.independent)').forEach(dropdown => {
+                    const startMeasure = dropdown.querySelector('.start-measure');
+                    const startNumerator = dropdown.querySelector('.start-numerator');
+                    const startDenominator = dropdown.querySelector('.start-denominator');
+                    const endMeasure = dropdown.querySelector('.end-measure');
+                    const endNumerator = dropdown.querySelector('.end-numerator');
+                    const endDenominator = dropdown.querySelector('.end-denominator');
+                    const copyEvents = dropdown.querySelector('.copy-events');
+                    const copyNotes = dropdown.querySelector('.copy-notes');
+
+                    startMeasure.placeholder = mainValues.startTime.measure || 0;
+                    startNumerator.placeholder = mainValues.startTime.numerator || 0;
+                    startDenominator.placeholder = mainValues.startTime.denominator || 4;
+                    endMeasure.placeholder = mainValues.endTime.measure || 0;
+                    endNumerator.placeholder = mainValues.endTime.numerator || 0;
+                    endDenominator.placeholder = mainValues.endTime.denominator || 4;
+                    copyEvents.checked = mainValues.copyEvents;
+                    copyNotes.checked = mainValues.copyNotes;
+                });
+            }
+            
+            syncMainValuesFromElements();
+            handleMainValueChange();
+        }
+        
+        function createMetadataDropdown(result) {
+            return `
+<div class="metadata-item">
+    <span class="metadata-label">RPE 版本</span>
+    <span class="metadata-value">${result.rpe_version}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">ID</span>
+    <span class="metadata-value">${result.id}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">名称</span>
+    <span class="metadata-value">${result.name}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">作曲家</span>
+    <span class="metadata-value">${result.composer}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">谱师</span>
+    <span class="metadata-value">${result.charter}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">难度</span>
+    <span class="metadata-value">${result.level}</span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">BPM</span>
+    <span class="metadata-value">
+        ${result.bpm_count} 条记录 (${(() => {
+            const minBpm = result.min_bpm.toFixed(0);
+            const maxBpm = result.max_bpm.toFixed(0);
+            return minBpm === maxBpm ? minBpm : `${minBpm}-${maxBpm}`;
+        })()})
+    </span>
+</div>
+<div class="metadata-item">
+    <span class="metadata-label">判定线数量</span>
+    <span class="metadata-value">${result.judge_line_count}</span>
+</div>
+`;
+        }
+
+        function createJudgeLineDropdown(cardIndex, judgeLine) {
+            return `
+<div class="dropdown-time-controls">
+    <div class="time-control-section">
+        <span class="time-control-label">开始时间</span>
+        <div class="time-signature">
+            <input type="number" min="0" class="measure start-measure" id="start-measure-${cardIndex}-${judgeLine}" placeholder="0" inputmode="numeric" pattern="\d*">
+            <span class="separator">:</span>
+            <input type="number" min="0" class="numerator start-numerator" id="start-numerator-${cardIndex}-${judgeLine}" placeholder="0" inputmode="numeric" pattern="\d*">
+            <span class="separator">/</span>
+            <input type="number" min="1" class="denominator start-denominator" id="start-denominator-${cardIndex}-${judgeLine}" placeholder="4" inputmode="numeric" pattern="\d">
+        </div>
+    </div>
+    <div class="time-control-section">
+        <span class="time-control-label">结束时间</span>
+        <div class="time-signature">
+            <input type="number" min="0" class="measure end-measure" id="end-measure-${cardIndex}-${judgeLine}" placeholder="0" inputmode="numeric" pattern="\d*">
+            <span class="separator">:</span>
+            <input type="number" min="0" class="numerator end-numerator" id="end-numerator-${cardIndex}-${judgeLine}" placeholder="0" inputmode="numeric" pattern="\d*">
+            <span class="separator">/</span>
+            <input type="number" min="1" class="denominator end-denominator" id="end-denominator-${cardIndex}-${judgeLine}" placeholder="4" inputmode="numeric" pattern="\d">
+        </div>
+    </div>
+</div>
+<div class="checkbox-section">
+    <label class="checkbox-item">
+        <input type="checkbox" checked class="copy-events sub-copy-events" id="copy-events-${cardIndex}-${judgeLine}">
+        <span>复制事件</span>
+    </label>
+    <label class="checkbox-item">
+        <input type="checkbox" checked class="copy-notes sub-copy-notes" id="copy-notes-${cardIndex}-${judgeLine}">
+        <span>复制音符</span>
+    </label>
+</div>
+`;
+        }
+
+        function moveCardUp(card) {
+            const cards = Array.from(document.querySelectorAll('.card'));
+            const index = cards.indexOf(card);
+            
+            if (index > 0) {
+                const prevCard = cards[index - 1];
+                
+                // 添加淡出动画类
+                card.classList.add('move-up-out');
+                prevCard.classList.add('move-down-out');
+                
+                // 等待动画完成后执行移动
+                setTimeout(() => {
+                    card.classList.remove('move-up-out');
+                    prevCard.classList.remove('move-down-out');
+                    
+                    cardContainer.insertBefore(card, prevCard);
+                    
+                    card.classList.add('move-up-in');
+                    prevCard.classList.add('move-down-in');
+                    
+                    updateCardStates();
+
+                    // 淡入动画完成后清理类并更新状态
+                    setTimeout(() => {
+                        card.classList.remove('move-up-in');
+                        prevCard.classList.remove('move-down-in');
+                    }, getCSSVarAsMs('--transition-fast'));
+                }, getCSSVarAsMs('--transition-fast'));
+            }
+        }
+
+        function moveCardDown(card) {
+            const cards = Array.from(document.querySelectorAll('.card'));
+            const index = cards.indexOf(card);
+            
+            if (index < cards.length - 1) {
+                const nextCard = cards[index + 1];
+                
+                // 添加淡出动画类
+                card.classList.add('move-down-out');
+                nextCard.classList.add('move-up-out');
+                
+                // 等待动画完成后执行移动
+                setTimeout(() => {
+                    card.classList.remove('move-down-out');
+                    nextCard.classList.remove('move-up-out');
+                    
+                    cardContainer.insertBefore(nextCard, card);
+                    
+                    card.classList.add('move-down-in');
+                    nextCard.classList.add('move-up-in');
+                    
+                    updateCardStates();
+                    
+                    // 淡入动画完成后清理类并更新状态
+                    setTimeout(() => {
+                        card.classList.remove('move-down-in');
+                        nextCard.classList.remove('move-up-in');
+                    }, getCSSVarAsMs('--transition-fast'));
+                }, getCSSVarAsMs('--transition-fast'));
+            }
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleFileSelection(file, pathEl, statusEl) {
+            if (!(file.name.endsWith('.json') && file.type === 'application/json') &&
+                !(file.name.endsWith('.pez'))) {
+                showStatus(statusEl, '请选择 JSON 或 PEZ 文件', 'error');
+                return;
+            }
+
+            pathEl.value = file.name;
+            const isPEZ = file.name.endsWith('.pez');
+            const reader = new FileReader();
+            const thisCard = statusEl.closest('.card');
+            const cardIndex = parseInt(thisCard.dataset.cardIndex, 10); // 从数据属性获取卡片编号
+
+            isPEZ ? reader.readAsArrayBuffer(file) : reader.readAsText(file);
+            reader.onload = async function(e) {
+                if ((isPEZ && typeof window._extract_pez !== 'function') ||
+                    (!isPEZ && typeof window._parse_json !== 'function')) {
+                    showStatus(statusEl, 'WASM 模块尚未加载完成', 'error');
+                    return;
+                }
+
+                let resultPtr, jsonStr;
+                if (isPEZ) {
+                    const arrayBuffer = e.target.result;
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    const byteLength = uint8Array.length;
+
+                    const pezPtr = Module._malloc(byteLength);
+                    Module.HEAPU8.set(uint8Array, pezPtr);
+                    
+                    const jsonStrPtr = window._extract_pez(pezPtr, uint8Array.length);
+                    jsonStr = Module.UTF8ToString(jsonStrPtr);
+
+                    // 我知道这个东西有点问题，但是你知道吗，我不打算改
+
+                    uint8Array.fill(0);
+                    Module._free(jsonStrPtr);
+                    Module._free(pezPtr);
+                } else {
+                    jsonStr = e.target.result;
+                }
+                
+                const byteLength = Module.lengthBytesUTF8(jsonStr) + 1;
+                const ptr = Module._malloc(byteLength);
+                Module.stringToUTF8(jsonStr, ptr, byteLength);
+
+                // thisCard.dataset.rawJson = jsonStr;
+                // wtf no way...
+                try {
+                    await chartStorage.saveChart(cardIndex, jsonStr);
+                    console.log(`卡片 ${cardIndex} 的谱面数据已存储`);
+                } catch (error) {
+                    console.error('存储失败:', error);
+                    showStatus(statusEl, '数据存储失败', 'error');
+                }
+                jsonStr = null;
+
+                resultPtr = window._parse_json(ptr, byteLength - 1);
+                Module._free(ptr);
+
+                // 解析结果
+                const result = JSON.parse(Module.UTF8ToString(resultPtr));
+                // Module._free(resultPtr);
+                
+                if (result.error !== 0) {
+                    // 错误处理
+                    const errorMsg = {
+                        "-1": "JSON 格式错误",
+                        "-2": "空输入数据",
+                        "-3": "PEZ 文件初始化失败",
+                        "-4": "PEZ 内 JSON 为空",
+                        "-5": "WHATTHEFUCK"
+                    }[result.error] || `未知错误 (${result.error})`;
+                    showStatus(statusEl, errorMsg, 'error');
+                    return;
+                }
+                
+                const cardContent = statusEl.closest('.card-content');
+                const dropArea = cardContent.querySelector('.drop-area');
+                dropArea.classList.add('hidden');
+                
+                const metadataContainer = cardContent.querySelector('.metadata-container');
+                const metadataContent = metadataContainer.querySelector('.metadata-content');
+                const metadataHeader = metadataContainer.querySelector('.metadata-header');
+                
+                const judgeLineContainer = cardContent.querySelector('.judge-line-container');
+                const judgeLineContent = judgeLineContainer.querySelector('.judge-line-content');
+                const judgeLineHeader = judgeLineContainer.querySelector('.judge-line-header');
+
+                const newMetadataHeader = metadataHeader.cloneNode(true);
+                metadataHeader.parentNode.replaceChild(newMetadataHeader, metadataHeader);
+                const newJudgeLineHeader = judgeLineHeader.cloneNode(true);
+                judgeLineHeader.parentNode.replaceChild(newJudgeLineHeader, judgeLineHeader);
+
+                metadataContent.innerHTML = createMetadataDropdown(result);
+                judgeLineContent.innerHTML = '';
+                
+                // 遍历每根判定线
+                result.judge_line_stats.forEach((lineStats, index) => {
+                    // 创建下拉框容器
+                    const lineItem = document.createElement('div');
+                    lineItem.className = 'judge-line-dropdown';
+                    lineItem.dataset.number = index;
+                    
+                    // 下拉框标题
+                    const dropdownHeader = document.createElement('div');
+                    dropdownHeader.className = 'dropdown-header';
+                    /*
+                    dropdownHeader.innerHTML = `
+                        判定线 ${index}：事件 ${lineStats.event_count} / 故事板 ${lineStats.special_event_count} / 音符 ${lineStats.note_count}
+                        <span class="dropdown-icon">▼</span>
+                    `;
+                    */
+                    dropdownHeader.innerHTML = `
+                        判定线 ${index}：事件 ${lineStats.event_count} / 音符 ${lineStats.note_count}
+                        <span class="dropdown-icon">▼</span>
+                    `;
+                    
+                    // 下拉框内容
+                    const dropdownContent = document.createElement('div');
+                    dropdownContent.className = 'dropdown-content';
+                    dropdownContent.innerHTML = createJudgeLineDropdown(cardIndex, index);
+                    
+                    // 组合下拉框元素
+                    lineItem.appendChild(dropdownHeader);
+                    lineItem.appendChild(dropdownContent);
+                    judgeLineContent.appendChild(lineItem);
+                });
+                
+                // 展开/折叠功能
+                const updatedMetadataHeader = metadataContainer.querySelector('.metadata-header');
+                updatedMetadataHeader.addEventListener('click', () => {
+                    metadataContainer.classList.toggle('expanded');
+                });
+                const updatedJudgeLineHeader = judgeLineContainer.querySelector('.judge-line-header');
+                updatedJudgeLineHeader.addEventListener('click', () => {
+                    judgeLineContainer.classList.toggle('expanded');
+                });
+
+                setTimeout(() => {
+                    dropArea.style.display = 'none';
+
+                    // 显示时间控制区域
+                    const timeControls = statusEl.closest('.card-content').querySelector('.time-controls-container');
+                    timeControls.style.display = 'flex';
+                    void timeControls.offsetWidth; // 触发重排
+                    timeControls.classList.add('visible');
+                    // 显示元数据容器
+                    metadataContainer.style.display = 'block';
+                    void metadataContainer.offsetWidth; // 触发重排
+                    metadataContainer.classList.add('visible');
+                    // 显示判定线容器
+                    judgeLineContainer.style.display = 'block';
+                    void judgeLineContainer.offsetWidth; // 触发重排
+                    judgeLineContainer.classList.add('visible');
+                }, getCSSVarAsMs('--transition-default'));
+                
+                const card = statusEl.closest('.card');
+                card.classList.add('has-file');
+                // card.style.overflow = 'auto';
+                // showToast(`文件解析成功: ${file.name}`);
+            }
+        }
+
+        async function getChartData(cardId) {
+            if (isNaN(cardId)) return "(NaN cardId)"
+
+            const jsonStr = await chartStorage.getChart(cardId);
+            if (jsonStr) {
+                return jsonStr;
+            }
+
+            return "(no json string)";
+        }
+
+        function getFirstCardIndex() {
+            // 按 DOM 顺序获取所有卡片，找到第一个带有 has-file 类的
+            const cards = document.querySelectorAll('.card');
+            for (const card of cards) {
+                if (card.classList.contains('has-file')) {
+                    const index = parseInt(card.dataset.cardIndex, 10);
+                    return isNaN(index) ? null : index;
+                }
+            }
+            return null; // 没有符合条件的卡片
+        }
+
+        function showStatus(el, msg, type) {
+            el.innerHTML = msg;
+            el.className = `status-message ${type}`;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', getCSSVarAsMs('--transition-default'));
+        }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), getCSSVarAsMs('--transition-default'));
+        }
+
+        let errorToast = null;
+
+        // 创建错误提示元素
+        function createErrorToast() {
+            if (!errorToast) {
+                errorToast = document.createElement('div');
+                errorToast.className = 'toast error';
+                errorToast.style.top = '20px';
+                errorToast.style.bottom = 'auto';
+                errorToast.style.backgroundColor = '#ef4444';
+                document.body.appendChild(errorToast);
+            }
+            return errorToast;
+        }
+
+        // 显示错误提示
+        function showError(message) {
+            const toast = createErrorToast();
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // 输入框闪烁动画
+        function flashInput(input) {
+            input.removeEventListener('animationend', onFlashEnd);
+            
+            input.style.borderColor = '#ef4444';
+            input.style.animation = 'none';
+            input.offsetHeight; // 重绘
+            input.style.animation = 'flash 3s';
+            
+            function onFlashEnd() {
+                input.style.animation = '';
+                input.style.borderColor = '';
+                input.removeEventListener('animationend', onFlashEnd);
+            }
+            input.addEventListener('animationend', onFlashEnd);
+        }
+
+        // 添加闪烁动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes flash {
+                0% { border-color: #ef4444; }
+                50% { border-color: #ffcccc; }
+                100% { border-color: #d1d5db; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 解析时间为数值
+        function parseTime(measure, numerator, denominator) {
+            const m = parseInt(measure, 10) || 0;
+            const n = parseInt(numerator, 10) || 0;
+            const d = 
+                parseInt(denominator, 10) > 0 ? parseInt(denominator, 10) : 1;
+            return m + (n / d);
+        }
+
+        // 检查所有谱面
+        function validateCards() {
+            const hasFileCards = Array.from(cardContainer.querySelectorAll('.card.has-file'));
+            
+            // 是否有谱面文件
+            if (hasFileCards.length === 0) {
+                showError('未读取任何谱面');
+                return false;
+            }
+            
+            // 检查每个谱面的时间设置
+            for (const card of hasFileCards) {
+                // 移除折叠状态
+                card.classList.remove('collapsing', 'initially-collapsing');
+                
+                // 获取文件路径
+                const filePath = card.querySelector('.file-path').value || '未知文件';
+                
+                // 获取时间控制元素
+                const timeControls = card.querySelector('.time-controls-container');
+                if (!timeControls.classList.contains('visible')) {
+                    timeControls.classList.add('visible');
+                }
+                
+                // 获取所有时间输入框
+                const startMeasure = card.querySelector('.start-measure');
+                const startNumerator = card.querySelector('.start-numerator');
+                const startDenominator = card.querySelector('.start-denominator');
+                const endMeasure = card.querySelector('.end-measure');
+                const endNumerator = card.querySelector('.end-numerator');
+                const endDenominator = card.querySelector('.end-denominator');
+                
+                const inputs = [
+                    startMeasure, startNumerator, startDenominator,
+                    endMeasure, endNumerator, endDenominator
+                ];
+                
+                // 检查是否有未填写的数值
+                let hasEmptyInput = false;
+                inputs.forEach(input => {
+                    if (!input.value.trim()) {
+                        hasEmptyInput = true;
+                        flashInput(input);
+                    } else {
+                        input.style.borderColor = ''; // 重置已填写的输入框样式
+                    }
+                });
+                
+                if (hasEmptyInput) {
+                    showError(`请填写 ${filePath} 谱面的数值`);
+                    return false;
+                }
+                
+                // 检查开始时间是否晚于结束时间
+                const startTime = parseTime(
+                    startMeasure.value, 
+                    startNumerator.value, 
+                    startDenominator.value
+                );
+                const endTime = parseTime(
+                    endMeasure.value, 
+                    endNumerator.value, 
+                    endDenominator.value
+                );
+                
+                if (startTime > endTime) {
+                    showError(`${filePath} 谱面的开始时间需要早于结束时间`);
+                    // 高亮显示相关输入框
+                    inputs.forEach(input => flashInput(input));
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function getCSSVar(varName) {
+            return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        }
+        function getCSSVarAsMs(varName) {
+            const value = getCSSVar(varName);
+            return parseFloat(value) * 1000;
+        }
+        function getCSSVarAsNumber(varName) {
+            const value = getCSSVar(varName);
+            return parseFloat(value);
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await chartStorage.open();
+                console.log('IndexedDB 初始化成功');
+            } catch (error) {
+                console.error('IndexedDB 初始化失败:', error);
+                // showToast('数据存储初始化失败，部分功能可能受限');
+            }
+            chartStorage.clearAll();
+        });
+        document.addEventListener('DOMContentLoaded', () => {            
+            // 等待 WASM 模块加载完成
+            Module.onRuntimeInitialized = () => {
+                const initialCard = document.createElement('div');
+                initialCard.className = 'card';
+                initialCard.innerHTML = createCardHTML(0);
+                cardContainer.appendChild(initialCard);
+                initialCard.dataset.cardIndex = 0;
+                /* 
+                 * 我他马知道这个可以用 createNewCard 替代，但是我懒了而且会有 bug
+                 */
+
+                bindCardEvents(document.querySelector('.card'));
+                updateCardStates();
+                window.addEventListener('resize', updateCardStates);
+
+                const helpBtn = document.querySelector('.help-btn');
+                const helpModal = document.querySelector('.help-modal');
+                const closeBtn = document.querySelector('.help-modal-close');
+                // 显示模态框
+                helpBtn.addEventListener('click', () => {
+                    helpModal.style.display = 'block';
+                    setTimeout(() => {
+                        helpModal.classList.add('show');
+                    }, 10);
+                });
+
+                // 关闭模态框
+                closeBtn.addEventListener('click', () => {
+                    helpModal.classList.remove('show');
+                    setTimeout(() => {
+                        helpModal.style.display = 'none';
+                    }, 300);
+                });
+
+                // 点击模态框外部关闭
+                helpModal.addEventListener('click', (e) => {
+                    if (e.target === helpModal) {
+                        helpModal.classList.remove('show');
+                        setTimeout(() => {
+                            helpModal.style.display = 'none';
+                        }, 300);
+                    }
+                });
+
+                // 按 ESC 键关闭
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && helpModal.style.display === 'block') {
+                        helpModal.classList.remove('show');
+                        setTimeout(() => {
+                            helpModal.style.display = 'none';
+                        }, 300);
+                    }
+                });
+
+                const mergeBtn = document.querySelector('.merge-btn');
+                const mergeModal = document.getElementById('mergeModal');
+                const mergeModalClose = document.querySelector('.merge-modal-close');
+
+                mergeBtn.addEventListener('click', () => {
+                    if (validateCards()) {
+                        mergeModal.style.display = 'block';
+                        setTimeout(() => {
+                            mergeModal.classList.add('show');
+                        }, 10);
+                    }
+                });
+
+                function closeMergeModal() {
+                    mergeModal.classList.remove('show');
+                    setTimeout(() => {
+                        mergeModal.style.display = 'none';
+                    }, 300);
+                }
+
+                mergeModalClose.addEventListener('click', closeMergeModal);
+
+                mergeModal.addEventListener('click', (e) => {
+                    if (e.target === mergeModal) {
+                        closeMergeModal();
+                    }
+                });
+
+                document.getElementById('confirmMerge').addEventListener('click', async () => {
+                    // 构建表单
+                    const mergeForm = {};
+
+                    // 获取最顶端卡片的 id
+                    mergeForm.firstCardId = getFirstCardIndex();
+
+                    // 获取 merge-option 中的 truncateStart 和 truncateEnd 值
+                    mergeForm.truncateStart = document.getElementById('truncateStart').checked;
+                    mergeForm.truncateEnd = document.getElementById('truncateEnd').checked;
+
+                    // 构建卡片数据数组
+                    mergeForm.cards = [];
+                    const cards = document.querySelectorAll('.card');
+                    
+                    for (const card of cards) {
+                        if (!card.classList.contains('has-file')) {
+                            continue;
+                        }
+                        const cardData = {};
+                        // 卡片 id
+                        cardData.id = parseInt(card.dataset.cardIndex, 10);
+
+                        // 获取 time-controls-container 中的值
+                        const timeControls = card.querySelector('.time-controls-container');
+                        if (timeControls) {
+                            const timeInputs = timeControls.querySelectorAll('.time-signature input');
+                            cardData.timeControls = {
+                                inputs: Array.from(timeInputs).map(input => parseFloat(input.value) || 0),
+                                checkboxes: Array.from(timeControls.querySelectorAll('.checkbox-item input'))
+                                    .map(checkbox => checkbox.checked)
+                            };
+                        }
+
+                        // 判定线
+                        cardData.independentJudgeLines = [];
+                        const independentDropdowns = card.querySelectorAll('.judge-line-dropdown.independent');
+                        
+                        independentDropdowns.forEach(dropdown => {
+                            const judgeLineData = {};
+                            const dropdownTimeInputs = dropdown.querySelectorAll('.dropdown-time-controls .time-signature input');
+                            const dropdownCheckboxes = dropdown.querySelectorAll('.dropdown-content .checkbox-item input');
+                            
+                            const lineNumber = parseInt(dropdown.dataset.number, 10) || 0;
+
+                            judgeLineData.timeControls = {
+                                inputs: Array.from(dropdownTimeInputs).map(
+                                    input => parseFloat(input.value) || -1), 
+                                // -1 表示留空，因为我不知道 C++ 那边怎么处理 NaN……
+                                checkboxes: Array.from(dropdownCheckboxes).map(checkbox => checkbox.checked)
+                            };
+                            judgeLineData.id = lineNumber;
+                            
+                            cardData.independentJudgeLines.push(judgeLineData);
+                        });
+
+                        // 获取谱面文件的 json 源字符串
+                        cardData.chartJson = await getChartData(cardData.id); 
+
+                        mergeForm.cards.push(cardData);
+                    }
+
+                    // console.log(mergeForm);
+                    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB/块
+                    const jsonStr = JSON.stringify(mergeForm); // 序列化完整对象
+                    const totalChunks = Math.ceil(jsonStr.length / CHUNK_SIZE);
+                    let currentChunk = 0;
+
+                    // 初始化 C++ 端的合并状态
+                    Module._init_merge(totalChunks);
+
+                    // 逐块传递数据
+                    while (currentChunk < totalChunks) {
+                        const start = currentChunk * CHUNK_SIZE;
+                        const end = Math.min(start + CHUNK_SIZE, jsonStr.length);
+                        const chunk = jsonStr.substring(start, end);
+
+                        // 分配内存并传递块数据
+                        const byteLength = Module.lengthBytesUTF8(chunk) + 1;
+                        const ptr = Module._malloc(byteLength);
+                        Module.stringToUTF8(chunk, ptr, byteLength);
+
+                        // 调用 C++ 分块处理函数
+                        const result = Module._process_merge_chunk(currentChunk, totalChunks, ptr, byteLength - 1);
+                        if (result !== 0) {
+                            showError(`分块 ${currentChunk} 处理失败，错误码: ${result}`);
+                            Module._free(ptr);
+                            return;
+                        }
+                        Module._free(ptr);
+                        currentChunk++;
+                    }
+
+                    // 所有块传递完成，触发最终合并
+                    const finalResultPtr = Module._finalize_merge();
+                    const finalResult = Module.UTF8ToString(finalResultPtr);
+                    Module._free(finalResultPtr);
+
+                    // 处理结果
+                    // console.log("合并结果:", finalResult);
+                    const firstCard = document.querySelector('.card-container .card:first-child');
+                    // 提取文件名（处理完整路径情况）
+                    let originalFileName = firstCard 
+                        ? firstCard.querySelector('.file-path').value.split(/[\\/]/).pop() 
+                        : 'merged_result';
+
+                    originalFileName = originalFileName.replace(/\.pez$/, '');
+                    // 确保文件名以 .json 结尾
+                    const fileName = originalFileName.endsWith('.json') 
+                        ? originalFileName 
+                        : `${originalFileName}.json`;
+
+                    // 创建 JSON 文件并下载
+                    try {
+                        // 直接使用已有的 JSON 字符串
+                        const jsonContent = finalResult;
+                        // 创建 Blob 对象（类型仍为 JSON）
+                        const blob = new Blob([jsonContent], { type: 'application/json' });
+                        // 创建下载链接
+                        const url = URL.createObjectURL(blob);
+                        const downloadLink = document.createElement('a');
+                        
+                        downloadLink.href = url;
+                        downloadLink.download = fileName; // 设置下载文件名
+                        
+                        // 触发下载
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        
+                        // 清理资源
+                        setTimeout(() => {
+                            document.body.removeChild(downloadLink);
+                            URL.revokeObjectURL(url);
+                        }, 0);
+                    } catch (error) {
+                        console.error('生成 JSON 文件失败：', error);
+                        alert('文件生成失败，请查看控制台错误信息');
+                    }
+                    closeMergeModal();
+                });
+            };
+        });
+    </script>
+</body>
+</html>
